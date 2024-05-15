@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeetCode Question Similarity</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <div class="w-full max-w-4xl mx-auto px-4 py-8 md:px-6 md:py-12">
+        <div class="flex flex-col gap-6">
+            <div class="space-y-2">
+                <h1 class="text-3xl font-bold">LeetCode Problem Finder</h1>
+                <p class="text-gray-500 dark:text-gray-400">Enter a LeetCode problem URL to find similar problems.</p>
+            </div>
+            <form id="similarity-form" class="flex items-center gap-4">
+                <input id="leetcode-url"
+                    class="flex h-10 w-full bg-background ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 flex-1 rounded-md border border-gray-300 px-4 py-2 text-sm focus:border-gray-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                    placeholder="Enter a LeetCode problem URL" type="text" name="leetcode-url" />
+                <button type="submit"
+                    class="inline-flex items-center justify-center whitespace-nowrap ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-10 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:bg-gray-600 dark:hover:bg-gray-500 dark:focus:ring-gray-400 dark:focus:ring-offset-gray-800">
+                    Search
+                </button>
+            </form>
+
+            <div id="loading-spinner" class="hidden flex justify-center items-center mt-4">
+                <style>
+                    .loader {
+                        border: 10px solid #f3f3f3; /* Light grey */
+                        border-top: 10px solid #3498db; /* Blue */
+                        border-radius: 50%;
+                        width: 70px;
+                        height: 70px;
+                        animation: spin 2s linear infinite;
+                    }
+    
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                </style>
+                <div class="loader"></div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full table-auto rounded-md border border-gray-300 dark:border-gray-600">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-800">
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 dark:text-gray-200">Problem
+                                Title</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 dark:text-gray-200">
+                                Similarity Score</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 dark:text-gray-200">Tagged
+                                Topics</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-900 dark:text-gray-200">Difficulty</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-table" class="bg-white divide-y divide-gray-300">
+                        <!-- Results will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="flex justify-between mt-4">
+                <button id="prev-page" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md disabled:opacity-50" disabled>Previous</button>
+                <button id="next-page" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md disabled:opacity-50" disabled>Next</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('similarity-form').addEventListener('submit', async function (event) {
+            event.preventDefault();
+            const url = document.getElementById('leetcode-url').value;
+            const fileName = url.split('/').slice(-2, -1)[0];
+
+            document.getElementById('loading-spinner').classList.remove('hidden');
+
+            const response = await fetch('sorted_similarities_with_scores.csv');
+            const data = await response.text();
+            const rows = data.split('\n').map(row => row.split(','));
+            const headers = rows[0];
+            const fileIndex = headers.indexOf(fileName);
+
+            if (fileIndex === -1) {
+                alert('File name not found in the CSV data.');
+                document.getElementById('loading-spinner').classList.add('hidden');
+                return;
+            }
+
+            const similarities = rows.slice(1).map(row => ({
+                fileName: row[0],
+                score: parseFloat(row[fileIndex])
+            })).sort((a, b) => b.score - a.score).slice(1);
+
+            const tagsResponse = await fetch('leetcode_q_full_info.csv');
+            const tagsData = await tagsResponse.text();
+            const tagsRows = tagsData.split('\n').map(row => row.split(','));
+            const tagsMap = new Map(tagsRows.slice(1).map(row => {
+                let tags = [];
+                for (let i = 1; i < row.length - 1; i++) {
+                    let tag = row[i].trim();
+                    if (i === 1) {
+                        tag = tag.replace(/^\[\s*'/, '');
+                    }
+                    if (i === row.length - 2) {
+                        tag = tag.replace(/'\s*\]$/, '');
+                    }
+                    tag = tag.replace(/^'/, '').replace(/'$/, '');
+                    if (tag) {
+                        tags.push(tag);
+                    }
+                }
+                return [row[0], tags];
+            }));
+            const difficultyMap = new Map(tagsRows.slice(1).map(row => [row[0], row[row.length - 1]]));
+            let currentPage = 1;
+            const resultsPerPage = 10;
+            const totalPages = Math.ceil(similarities.length / resultsPerPage);
+
+            function renderPage(page) {
+                const resultsTable = document.getElementById('results-table');
+                resultsTable.innerHTML = '';
+
+                const start = (page - 1) * resultsPerPage;
+                const end = start + resultsPerPage;
+                const pageResults = similarities.slice(start, end);
+
+                pageResults.forEach(similarity => {
+                    const difficulty = difficultyMap.get(similarity.fileName) || 'Unknown';
+                    if (difficulty === 'N/A') {
+                        return;
+                    }
+
+                    const row = document.createElement('tr');
+                    row.classList.add('bg-white', 'hover:bg-gray-100', 'dark:bg-gray-700', 'dark:hover:bg-gray-600');
+
+                    const titleCell = document.createElement('td');
+                    titleCell.classList.add('px-4', 'py-3', 'text-sm', 'text-gray-900', 'dark:text-gray-200');
+                    const link = document.createElement('a');
+                    link.href = `https://leetcode.com/problems/${similarity.fileName}/`;
+                    link.textContent = similarity.fileName.replace(/-/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+                    link.classList.add('text-blue-500', 'hover:underline'); // Make the link blue and underline on hover
+                    titleCell.appendChild(link);
+
+                    const scoreCell = document.createElement('td');
+                    scoreCell.classList.add('px-4', 'py-3', 'text-sm', 'text-gray-900', 'dark:text-gray-200');
+                    scoreCell.textContent = similarity.score.toFixed(2);
+
+                    const topicsCell = document.createElement('td');
+                    topicsCell.classList.add('px-4', 'py-3', 'text-sm', 'text-gray-900', 'dark:text-gray-200');
+                    const tags = tagsMap.get(similarity.fileName) || [];
+                    if (tags.length > 0) {
+                        tags[0] = tags[0].replace(/^\\?"\['/, '');
+                        tags[tags.length - 1] = tags[tags.length - 1].replace(/'\]\"$/, '');
+                    }
+                    tags.forEach(tag => {
+                        const tagDiv = document.createElement('div');
+                        tagDiv.classList.add('inline-flex', 'w-fit', 'items-center', 'whitespace-nowrap', 'border', 'text-xs', 'font-semibold', 'transition-colors', 'focus:outline-none', 'focus:ring-2', 'focus:ring-ring', 'focus:ring-offset-2', 'border-gray-300', 'bg-gray-100', 'text-gray-800', 'hover:bg-gray-200', 'rounded-md', 'px-2', 'py-1', 'm-1'); // Added 'm-1' for margin
+                        tagDiv.textContent = tag;
+                        topicsCell.appendChild(tagDiv);
+                    });
+
+                    const difficultyCell = document.createElement('td');
+                    difficultyCell.classList.add('px-4', 'py-3', 'text-sm', 'text-gray-900', 'dark:text-gray-200');
+                    difficultyCell.textContent = difficulty;
+
+                    const difficultyColors = {
+                        'Easy': 'bg-green-100 text-green-800 border-green-300 hover:bg-green-200',
+                        'Medium': 'bg-yellow-100 text-yellow-800 border-yellow-300 hover:bg-yellow-200',
+                        'Hard': 'bg-red-100 text-red-800 border-red-300 hover:bg-red-200',
+                        'Unknown': 'bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200'
+                    };
+                    const difficultyClass = difficultyColors[difficulty] || difficultyColors['Unknown'];
+                    difficultyCell.classList.add('inline-flex', 'w-fit', 'items-center', 'whitespace-nowrap', 'border', 'text-xs', 'font-semibold', 'transition-colors', 'focus:outline-none', 'focus:ring-2', 'focus:ring-ring', 'focus:ring-offset-2', 'rounded-md', 'px-2', 'py-1', 'm-1', ...difficultyClass.split(' '));
+
+                    row.appendChild(titleCell);
+                    row.appendChild(scoreCell);
+                    row.appendChild(topicsCell);
+                    row.appendChild(difficultyCell);
+
+                    resultsTable.appendChild(row);
+                });
+
+                document.getElementById('prev-page').disabled = page === 1;
+                document.getElementById('next-page').disabled = page === totalPages;
+            }
+
+            document.getElementById('prev-page').addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    renderPage(currentPage);
+                }
+            });
+
+            document.getElementById('next-page').addEventListener('click', () => {
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    renderPage(currentPage);
+                }
+            });
+
+            renderPage(currentPage);
+
+            document.getElementById('loading-spinner').classList.add('hidden');
+        });
+    </script>
+</body>
+
+</html>
