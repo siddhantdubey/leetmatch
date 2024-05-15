@@ -42,6 +42,7 @@
                     }
                 </style>
                 <div class="loader"></div>
+                <span class="ml-4 text-gray-500 dark:text-gray-400">Fetching data...</span>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full table-auto rounded-md border border-gray-300 dark:border-gray-600">
@@ -65,6 +66,12 @@
                 <button id="prev-page" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md disabled:opacity-50" disabled>Previous</button>
                 <button id="next-page" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md disabled:opacity-50" disabled>Next</button>
             </div>
+            <div class="mt-4 text-sm text-gray-500 dark:text-gray-400">
+                You can obtain the similarity data <a href="https://data.leetmatch.com/sorted_similarities_with_scores.csv" class="text-blue-500 hover:underline">here</a>.
+                <br>
+                It comes from taking all C++ solutions to available Leetcode problems, computing their embeddings, and then computing their semantic similarity. The source
+                for the solutions can be found in <a href="https://github.com/kamyu104/LeetCode-Solutions" class="text-blue-500 hover:underline">this repository</a>.
+            </div>
         </div>
     </div>
 
@@ -75,7 +82,7 @@
             const fileName = url.split('/').slice(-2, -1)[0];
 
             document.getElementById('loading-spinner').classList.remove('hidden');
-
+            
             const response = await fetch('https://data.leetmatch.com/sorted_similarities_with_scores.csv');
             const data = await response.text();
             const rows = data.split('\n').map(row => row.split(','));
