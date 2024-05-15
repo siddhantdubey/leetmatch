@@ -10,10 +10,14 @@
 
 <body>
     <div class="w-full max-w-4xl mx-auto px-4 py-8 md:px-6 md:py-12">
-        <div class="flex flex-col gap-6">
+        <div class="flex justify-center gap-4 mb-6">
+            <button id="show-finder" class="px-4 py-2 bg-blue-500 text-white rounded-md">Problem Finder</button>
+            <button id="show-comparator" class="px-4 py-2 bg-blue-500 text-white rounded-md">Problem Comparator</button>
+        </div>
+        <div id="problem-finder" class="flex flex-col gap-6">
             <div class="space-y-2">
                 <h1 class="text-3xl font-bold">LeetCode Problem Finder</h1>
-                <p class="text-gray-500 dark:text-gray-400">Enter a LeetCode problem URL to find similar problems.</p>
+                <p class="text-gray-500 dark:text-gray-400">Enter a LeetCode problem URL to find similar problems. URL should be in the form <code>https://leetcode.com/problems/<i>problem-name</i>/</code>.</p>
             </div>
             <form id="similarity-form" class="flex items-center gap-4">
                 <input id="leetcode-url"
@@ -66,12 +70,36 @@
                 <button id="prev-page" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md disabled:opacity-50" disabled>Previous</button>
                 <button id="next-page" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md disabled:opacity-50" disabled>Next</button>
             </div>
-            <div class="mt-4 text-sm text-gray-500 dark:text-gray-400">
-                You can obtain the similarity data <a href="https://data.leetmatch.com/sorted_similarities_with_scores.csv" class="text-blue-500 hover:underline">here</a>.
-                <br>
-                It comes from taking all C++ solutions to available Leetcode problems, computing their embeddings, and then computing their semantic similarity. The source
-                for the solutions can be found in <a href="https://github.com/kamyu104/LeetCode-Solutions" class="text-blue-500 hover:underline">this repository</a>.
+        </div>
+
+        <div id="problem-comparator" class="flex flex-col gap-6 hidden">
+            <div class="space-y-2">
+                <h1 class="text-3xl font-bold">LeetCode Problem Comparator</h1>
+                <p class="text-gray-500 dark:text-gray-400">Enter two LeetCode problem URLs to compare their similarity. URLs should be in the form <code>https://leetcode.com/problems/<i>problem-name</i>/</code>.</p>
             </div>
+            <form id="comparison-form" class="flex flex-col gap-4">
+                <input id="leetcode-url-1"
+                    class="flex h-10 w-full bg-background ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 flex-1 rounded-md border border-gray-300 px-4 py-2 text-sm focus:border-gray-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                    placeholder="Enter the first LeetCode problem URL" type="text" name="leetcode-url-1" />
+                <input id="leetcode-url-2"
+                    class="flex h-10 w-full bg-background ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 flex-1 rounded-md border border-gray-300 px-4 py-2 text-sm focus:border-gray-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                    placeholder="Enter the second LeetCode problem URL" type="text" name="leetcode-url-2" />
+                <button type="submit"
+                    class="inline-flex items-center justify-center whitespace-nowrap ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-10 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:bg-gray-600 dark:hover:bg-gray-500 dark:focus:ring-gray-400 dark:focus:ring-offset-gray-800">
+                    Compare
+                </button>
+            </form>
+
+            <div id="comparison-result" class="hidden flex justify-center items-center mt-4">
+                <span class="ml-4 text-gray-500 dark:text-gray-400">Similarity Score: <span id="similarity-score"></span></span>
+            </div>
+        </div>
+
+        <div class="mt-4 text-sm text-gray-500 dark:text-gray-400">
+            You can obtain the similarity data <a href="https://data.leetmatch.com/sorted_similarities_with_scores.csv" class="text-blue-500 hover:underline">here</a>.
+            <br>
+            It comes from taking all C++ solutions to available Leetcode problems, computing their embeddings, and then computing their semantic similarity. The source
+            for the solutions can be found in <a href="https://github.com/kamyu104/LeetCode-Solutions" class="text-blue-500 hover:underline">this repository</a>.
         </div>
     </div>
 
@@ -210,6 +238,40 @@
             renderPage(currentPage);
 
             document.getElementById('loading-spinner').classList.add('hidden');
+        });
+
+        document.getElementById('comparison-form').addEventListener('submit', async function (event) {
+            event.preventDefault();
+            const url1 = document.getElementById('leetcode-url-1').value;
+            const url2 = document.getElementById('leetcode-url-2').value;
+            const fileName1 = url1.split('/').slice(-2, -1)[0];
+            const fileName2 = url2.split('/').slice(-2, -1)[0];
+
+            const response = await fetch('https://data.leetmatch.com/sorted_similarities_with_scores.csv');
+            const data = await response.text();
+            const rows = data.split('\n').map(row => row.split(','));
+            const headers = rows[0];
+            const fileIndex1 = headers.indexOf(fileName1);
+            const fileIndex2 = headers.indexOf(fileName2);
+
+            if (fileIndex1 === -1 || fileIndex2 === -1) {
+                alert('One or both file names not found in the CSV data.');
+                return;
+            }
+
+            const similarityScore = parseFloat(rows.find(row => row[0] === fileName1)[fileIndex2]).toFixed(2);
+            document.getElementById('similarity-score').textContent = similarityScore;
+            document.getElementById('comparison-result').classList.remove('hidden');
+        });
+
+        document.getElementById('show-finder').addEventListener('click', () => {
+            document.getElementById('problem-finder').classList.remove('hidden');
+            document.getElementById('problem-comparator').classList.add('hidden');
+        });
+
+        document.getElementById('show-comparator').addEventListener('click', () => {
+            document.getElementById('problem-finder').classList.add('hidden');
+            document.getElementById('problem-comparator').classList.remove('hidden');
         });
     </script>
 </body>
