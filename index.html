@@ -76,7 +76,7 @@
 
             document.getElementById('loading-spinner').classList.remove('hidden');
 
-            const response = await fetch('sorted_similarities_with_scores.csv');
+            const response = await fetch('https://data.leetmatch.com/sorted_similarities_with_scores.csv');
             const data = await response.text();
             const rows = data.split('\n').map(row => row.split(','));
             const headers = rows[0];
